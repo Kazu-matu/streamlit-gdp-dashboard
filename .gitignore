@@ -1,0 +1,25 @@
+# APIキー — 絶対にコミットしない
+.env
+
+# 仮想環境
+.venv/
+
+# Python キャッシュ
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Playwright 録画ファイル
+*.webm
+
+# uv
+uv.lock
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/

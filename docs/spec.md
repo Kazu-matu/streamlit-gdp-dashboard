@@ -30,6 +30,7 @@
 | 可視化 | `plotly` | インタラクティブなグラフ描画 |
 | パッケージ管理 | `uv` + `pyproject.toml` | 仮想環境（`.venv`）および高速なパッケージ同期 |
 | EXE化ツール | `pyinstaller` | ポータブルな配布用実行ファイル（EXE）のコンパイル |
+| セキュリティ検査 | `pip-audit` / `Bandit` | 依存ライブラリの脆弱性診断および静的コードセキュリティスキャン |
 
 ---
 
@@ -42,6 +43,7 @@ gdp-dashboard/
 ├── app.py                  # エントリーポイント・タブ制御・セッション管理
 ├── launcher.py             # EXE 起動用ラッパー（Streamlitのプログラム起動 & ブラウザ自動表示）
 ├── build.bat               # EXE ビルド用バッチファイル（PyInstaller呼び出し定義）
+├── logger_config.py        # アプリ全体のロギング一元設定（stderr出力 + UTF-8ログ書き出し）
 ├── generate_dummy_data.py  # ローカルデモ用のダミーデータ（CSV/Excel/SQLite）作成スクリプト
 ├── config.py               # 全定数・マスターデータ（国コード・カラー）
 ├── pyproject.toml          # 依存パッケージ定義（uv管理）
@@ -73,7 +75,8 @@ gdp-dashboard/
     ├── spec.md             # 本仕様書
     ├── implementation_plan.md # 開発統合計画書
     ├── task.md             # タスクチェックリスト
-    └── walkthrough.md      # 検証実績報告書
+    ├── walkthrough.md      # 検証実績報告書
+    └── AI_Python_製造業分析フレームワーク_EUC向け.md # AI×Python 製造業分析ガイド（EUC向け）
 ```
 
 ---

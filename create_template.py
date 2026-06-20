@@ -862,6 +862,9 @@ jobs:
     guide_src = here / "docs" / "事例で学ぶWeb開発入門_Streamlit.md"
     copy_doc(guide_src, target / "docs" / "事例で学ぶWeb開発入門_Streamlit.md")
 
+    framework_guide_src = here / "docs" / "AI_Python_製造業分析フレームワーク_EUC向け.md"
+    copy_doc(framework_guide_src, target / "docs" / "AI_Python_製造業分析フレームワーク_EUC向け.md")
+
     for tmpl_name in ["テンプレート_01_要件定義.md", "テンプレート_02_仕様書.md",
                        "テンプレート_03_テスト仕様書.md", "テンプレート_04_報告書.md"]:
         tmpl_src = here / "docs" / tmpl_name
@@ -971,6 +974,7 @@ uv run pytest tests/e2e/ -v
     ├── 02_仕様書.md
     ├── 03_テスト仕様書.md
     ├── 04_報告書.md
+    ├── AI_Python_製造業分析フレームワーク_EUC向け.md
     └── 事例で学ぶWeb開発入門_Streamlit.md
 ```
 
@@ -995,6 +999,7 @@ uv run pytest tests/e2e/ -v
 | [02_仕様書.md](docs/02_仕様書.md) | どう作るか（データフロー・画面仕様・設定値） |
 | [03_テスト仕様書.md](docs/03_テスト仕様書.md) | どう検証するか（E2E テスト設計） |
 | [04_報告書.md](docs/04_報告書.md) | 結果（テスト結果・不具合・デプロイ依頼） |
+| [AI 分析フレームワーク ガイド](docs/AI_Python_製造業分析フレームワーク_EUC向け.md) | EUC向けAI×Python活用ガイド（製造業分析） |
 | [Streamlit 開発入門](docs/事例で学ぶWeb開発入門_Streamlit.md) | バイブコーディング入門＋技術解説 |
 """)
 
@@ -1011,7 +1016,7 @@ uv run pytest tests/e2e/ -v
   data/worldbank.py
   views/page_config.py / sidebar.py / dashboard.py / components.py
   tests/test_imports.py / tests/e2e/
-  docs/   (01_要件定義 ~ 04_報告書 + 開発入門)
+  docs/   (01_要件定義 ~ 04_報告書 + 開発入門 + 分析フレームワーク)
   AI_INSTRUCTIONS.md / .github/copilot-instructions.md
   .github/workflows/ci.yml  <- GitHub Actions (自動テスト)
 

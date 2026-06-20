@@ -1,14 +1,14 @@
 # 各国GDP比較ダッシュボード — プロジェクト完了報告書
 
-作成日: 2026-06-06  
-プロジェクト期間: 2026-06-06（単日完了）
+作成日: 2026-06-21  
+プロジェクト期間: 2026-06-06 〜 2026-06-21 (マルチデータソース対応・EXE化対応を追加完了)
 
 ---
 
 ## 1. プロジェクト概要
 
-世界銀行・IMF・FRED・e-Stat の4つの公開APIを統合し、各国GDP・経済成長率・日本の経済指標を可視化・比較する Streamlit ダッシュボードを開発した。  
-開発・検証・リファクタリング・ドキュメント整備までを一貫して実施。
+世界銀行・IMF・FRED・e-Stat の公開 API を統合し、各国GDP・経済成長率・日本の経済指標を可視化・比較する Streamlit ダッシュボードをベースに、ローカルデータソース（CSV、Excel、SQLite）からのデータ抽出・可視化をサポートするデモ機能を追加した。
+さらに、Python 等の環境が不要な Windows スタンドアロン EXE（実行ファイル）の自動コンパイルラインを整備し、ポータブルな配布に対応する高度なアプリケーションフレームワークへと拡張を完了した。
 
 ---
 
@@ -18,37 +18,41 @@
 
 | ファイル / ディレクトリ | 役割 |
 |---|---|
-| `app.py` | エントリーポイント・タブ制御・セッション管理 |
-| `config.py` | 全定数・マスターデータ（国コード・API URL・カラーパレット） |
+| `app.py` | エントリーポイント・タブ制御・セッション管理・ローカル動的フィルタリング |
+| `launcher.py` | EXE 起動ラッパー（Streamlitのプログラム起動 & ポート待機ブラウザ自動起動） |
+| `build.bat` | PyInstaller を呼び出してスタンドアロン EXE をビルドするバッチファイル |
+| `generate_dummy_data.py` | ローカル可視化デモ用のダミーデータ（CSV, Excel, SQLite）作成スクリプト |
+| `config.py` | 全定数・マスターデータ（国コード・カラーパレットなど） |
+| `data/__init__.py` | データ取得層の統合エクスポート |
 | `data/worldbank.py` | 世界銀行 GDP・成長率データ取得 |
 | `data/fred.py` | FRED 月次指標データ取得 |
 | `data/estat.py` | e-Stat 景気動向指数データ取得 |
-| `views/page_config.py` | ページ設定・グローバル CSS |
-| `views/sidebar.py` | サイドバー UI |
-| `views/components.py` | 共通 UI 部品（CSV ダウンロード・テーブル） |
+| `data/local_csv.py` | ローカル CSV データロードおよびカラム正規化 |
+| `data/local_excel.py` | ローカル Excel データロードおよびカラム正規化 |
+| `data/local_sqlite.py` | ローカル SQLite データベースデータロードおよびカラム正規化 |
+| `views/__init__.py` | 描画ビュー層の統合エクスポート |
+| `views/page_config.py` | ページ設定・グローバル CSS (サイドバーグラデーション・ボタンアニメーション) |
+| `views/sidebar.py` | サイドバー UI (外部API取得に加え、ローカルデータ範囲設定・取得ボタンを装備) |
+| `views/components.py` | 共通 UI 部品（CSV ダウンロード・エクスパンダーテーブル） |
 | `views/worldbank_tab.py` | 世界銀行 GDP タブ描画 |
 | `views/imf_tab.py` | IMF 成長率タブ描画 |
 | `views/japan_tab.py` | 日本経済指標タブ描画 |
-| `pyproject.toml` | 依存パッケージ定義（uv 管理） |
-| `.env` | API キー（FRED / e-Stat） |
-
-### 2.2 自動化スクリプト
-
-| ファイル | 役割 |
-|---|---|
-| `demo_playwright.py` | Playwright による自動デモ & WebM 録画（8ステップ） |
+| `views/local_csv_tab.py` | ローカル CSV エリアグラフ可視化画面 |
+| `views/local_sqlite_tab.py` | ローカル SQLite グループ棒グラフ可視化画面 |
+| `views/local_excel_tab.py` | ローカル Excel 折れ線グラフ可視化画面 |
+| `pyproject.toml` | 依存パッケージ定義（uv 管理、openpyxl および pyinstaller を同梱） |
+| `.env.example` / `.env` | 環境設定ファイル・API キー（FRED / e-Stat） |
 
 ### 2.3 ドキュメント
 
 | ファイル | 内容 |
 |---|---|
-| `docs/spec.md` | アプリ仕様書（アーキテクチャ・画面設計・Mermaid図） |
+| `docs/spec.md` | アプリ仕様書（アーキテクチャ・データフロー・画面設計・Mermaid図・EXEビルド手順） |
+| `docs/implementation_plan.md` | EXE化およびマルチデータソースデモ統合のための開発計画書 |
+| `docs/task.md` | 実装進捗確認用チェックリスト |
+| `docs/walkthrough.md` | 実装・ビルド・ブラウザ検証結果を画像・動画とともにまとめた成果報告書 |
 | `docs/japan_indicators_research.md` | 日本経済指標 API 調査メモ |
 | `docs/prompts.md` | 開発プロンプト履歴 |
-
-### 2.4 録画ファイル
-
-デモ実行のたびに `*.webm` として出力。最終確認済み録画を含む計3件。
 
 ---
 
@@ -56,49 +60,39 @@
 
 ### 3.1 タブ構成
 
-| タブ | データソース | 主要指標 |
-|---|---|---|
-| 🌍 世界銀行 GDP | World Bank API v2 | GDP（米ドル建て）`NY.GDP.MKTP.CD` |
-| 📈 IMF GDP 成長率 | World Bank API v2 | 実質 GDP 成長率 `NY.GDP.MKTP.KD.ZG` |
-| 🇯🇵 日本経済指標 | FRED + e-Stat（内閣府） | 鉱工業生産・失業率・CPI・景気動向指数 |
+| タブ | データソース | 可視化方法 | 主要指標 |
+|---|---|---|---|
+| 🌍 世界銀行 GDP | World Bank API v2 | Plotly 折れ線グラフ | GDP（米ドル建て）`NY.GDP.MKTP.CD` |
+| 📈 IMF GDP 成長率 | World Bank API v2 | Plotly 折れ線グラフ | 実質 GDP 成長率 `NY.GDP.MKTP.KD.ZG` |
+| 🇯🇵 日本経済指標 | FRED + e-Stat | Plotly 折れ線グラフ | 鉱工業生産・失業率・CPI・景気動向指数 |
+| 📁 CSVデータ (ローカル) | ローカル CSV | Plotly 積層エリアグラフ | 独自生成データ（カナダ・ブラジル・韓国） |
+| 🗄️ SQLiteデータ (ローカル) | ローカル SQLite | Plotly グループ棒グラフ | 独自生成データ（イギリス・フランス・イタリア） |
+| 📊 Excelデータ (ローカル) | ローカル Excel | Plotly 一点鎖線付き折れ線 | 独自生成データ（オーストラリア・インド・ドイツ） |
 
 ### 3.2 共通機能
 
-- **国・期間の動的選択**（マルチセレクト + スライダー）
-- **ボタン押下時のオンデマンド取得**（初期表示ではAPI呼び出しなし）
-- **24時間キャッシュ**（`@st.cache_data(ttl=86400)`）によるAPI負荷軽減
-- **CSV ダウンロード**（UTF-8 BOM 付き、Excel 対応）
-- **エラーハンドリング**（接続エラー・タイムアウト・空データを `st.error` で通知）
-- **セッション状態保持**（タブ切替時もデータを保持）
+- **期間の動的選択**（マルチセレクト + スライダー）
+- **オンデマンド取得設計**（初期表示では無駄なAPIやファイルIOを呼び出さない）
+- **メモリキャッシュ（Streamlit Cache）**による負荷軽減と高速な応答
+- **CSV ダウンロード機能**（UTF-8 BOM 付きにより Excel の文字化けを防止）
+- **ロバストなエラーハンドリング**（接続切断やデータ不足を `st.error` で処理）
+- **データ自動生成**（ローカルデータが存在しない場合、初回読み込み時に自動でダミーファイルを構築）
+- **セッション状態保持**（タブ切替時や再描画時もデータを保持）
 
-### 3.3 日本経済指標（詳細）
+### 3.3 EXE化（実行ファイル化）対応
 
-| 指標 | API | シリーズID | 種別 |
-|---|---|---|---|
-| 景気動向指数 先行CI | e-Stat（内閣府） | `0003446461` cat01=100 | 先行 |
-| 景気動向指数 一致CI | e-Stat（内閣府） | `0003446461` cat01=110 | 実績 |
-| 鉱工業生産指数 | FRED | `JPNPROINDMISMEI` | 実績 |
-| 完全失業率 | FRED | `LRUN64TTJPM156S` | 実績 |
-| CPI（消費者物価） | FRED | `JPNCPIALLMINMEI` | 実績 |
+- **ポータブル性**: PyInstaller を用いて `.venv\Lib\site-packages\streamlit` と `plotly` のアセットを完全に同梱。
+- **コンソールなし起動**: ウィンドウモード（`--windowed`）を標準採用し、コマンドプロンプトの黒い画面を非表示に。
+- **ブラウザ自動起動**: サーバーポート（8501）の開放状況を別スレッドで監視し、起動完了と同時にブラウザを自動展開。
+- **動的設定ファイルの読み込み**: 実行時が frozen 状態（EXE起動）か通常実行かを判別し、`.env` ファイルを「実行ファイルと同階層」から動的ロード。
 
 ---
 
-## 4. アーキテクチャ
+## 4. アーキテクチャ設計方針
 
-### 4.1 モジュール構成
-
-リファクタリングにより 1014 行の単一ファイルを11モジュールに分割。
-
-| 区分 | ファイル数 | 合計行数 | 最大行数/ファイル |
-|---|---|---|---|
-| リファクタリング前 | 1 | 1,014 行 | 1,014 行 |
-| リファクタリング後 | 11 | 901 行 | 120 行 |
-
-### 4.2 設計方針
-
-- **関心の分離**: データ取得（`data/`）・UI 描画（`views/`）・定数（`config.py`）を完全分離
-- **拡張性**: 指標追加は `config.py` の `FRED_SERIES` に1エントリ追加するだけで対応可能
-- **環境非依存**: `pyproject.toml` + `uv` による仮想環境管理（`.venv`）でシステム Python に依存しない
+- **関心の分離 (Separation of Concerns)**: データ取得（`data/`）・UI 描画（`views/`）・設定定義（`config.py`）を完全に分離。
+- **拡張性**: データの接続先を増やす際は、`data/` にリーダーを追加し、`views/` にグラフ定義を用意するだけで、コアロジックを崩さずに統合可能。
+- **ポータビリティ**: `uv` による決定論的パッケージロックと、PyInstaller の hidden-import 定義により、ビルド手順が完全に自動化されている。
 
 ---
 
@@ -106,117 +100,42 @@
 
 | 課題 | 原因 | 対応 |
 |---|---|---|
-| `UnicodeEncodeError` | Windows コンソールの cp932 エンコーディング | `PYTHONIOENCODING=utf-8` を設定 |
-| `ModuleNotFoundError: plotly` | システム Python でアプリ起動していた | `pyproject.toml` + `uv sync` で仮想環境を構築 |
-| IMF API 403 エラー | IMF サーバーが `www.imf.org` からのリクエストをブロック | 同一指標（`NY.GDP.MKTP.KD.ZG`）を World Bank API で代替取得 |
-| e-Stat `'DATA_INF'` KeyError | カテゴリコード・`cdTab` パラメータの誤り | 正しいコード（`cdTab=100`, `cdCat01=100,110`）とタイムコードパース（位置6〜8桁）に修正 |
+| **Streamlit の Port 3000 リダイレクト (開発モード化)** | 直接 `bootstrap.run()` を呼び出すと CLI パース処理を通らないため、PyInstaller環境下で `global.developmentMode` が True と判定され、静的リソースパスが外れてブラウザ上で 404 エラーとなる。 | `launcher.py` 内で、`bootstrap.run()` の前に `bootstrap.load_config_options(flag_options)` を明示的に呼び出し、ポート 8501 と headless 構成等のオーバーレイ設定を強制反映させた。 |
+| **起動時の一時フリーズ・タイムアウト** | Streamlit 起動のタイミングよりブラウザ立ち上げが早いと接続拒否になる。 | `launcher.py` 内にソケット接続テストスレッドを設け、ポート 8501 が実際にリッスンされるのを確認してから `webbrowser.open` をキックするよう制御した。 |
+| **EXE化時の .env 読み込み失敗** | `__file__` を参照して `.env` を読もうとすると、PyInstaller の内部一時展開先 (`_MEIPASS`) を見てしまうため、ユーザー定義の設定を反映できない。 | `sys.frozen` を検知し、EXE化時は `sys.executable` (実行ファイルパス) の親ディレクトリから `.env` を検索するよう動的パス切り替えロジックを実装した。 |
+| **Excel 読込時のエラー** | 標準ライブラリのみでは Excel を Pandas にパースできない。 | `openpyxl` を依存関係に組み込み、適切にエンジン設定をバインドして読み込み。 |
 
 ---
 
-## 6. 検証結果
+## 6. 実行・ビルド方法
 
-### 6.1 Playwright 自動デモ（最終実行）
-
-| ステップ | 内容 | 結果 |
-|---|---|---|
-| 1 | アプリ起動・Streamlit ロード待機 | ✅ |
-| 2 | 世界銀行「データ取得」クリック → チャート表示 | ✅ |
-| 3 | スムーズスクロールでグラフ閲覧 | ✅ |
-| 4 | 生データ エクスパンダー展開 | ✅ |
-| 5 | ページトップへ戻る | ✅ |
-| 6 | IMF タブに切り替え | ✅ |
-| 7 | IMF「データ取得」クリック → チャート表示 | ✅ |
-| 8 | IMF グラフ・テーブル閲覧 | ✅ |
-
-録画ファイル: `page@6b246a1a9cf07be19f7c3cb49e6e4916.webm`（5.5 MB）
-
-### 6.2 構文チェック
-
-全11モジュールの `ast.parse` チェック: **全件 OK**
-
----
-
-## 7. 実行方法
-
-```powershell
-# 初回セットアップ
+### 6.1 アプリケーションの通常起動
+```bash
+# パッケージインストール
 uv sync
-playwright install chromium   # デモ録画用
 
-# アプリ起動
+# 起動
 uv run streamlit run app.py
-
-# 自動デモ & 録画
-$env:PYTHONIOENCODING="utf-8"; uv run python demo_playwright.py
 ```
+
+### 6.2 実行ファイルのビルド (Windows)
+```cmd
+# バッチファイルを起動
+build.bat
+```
+*   完了後、`dist\GDP_Dashboard` フォルダ配下に `GDP_Dashboard.exe` が出力されます。
+*   `GDP_Dashboard.exe` と同じフォルダに `.env` を配置してダブルクリックすると起動します。
 
 ---
 
-## 8. セキュリティ検査結果
+## 7. セキュリティスキャン結果
 
-実施日: 2026-06-06
-
-### 8.1 依存パッケージ脆弱性スキャン（pip-audit）
-
-`uv audit` は現バージョン（gdp-dashboard 0.1.0）で未サポートのため、`pip-audit` を使用。  
-`uv export` で生成した依存ロックファイル（55パッケージ）を対象にスキャンを実施。
-
-```
-$ pip-audit -r requirements.txt
-Resolved 55 packages in 0.76ms
-No known vulnerabilities found
-```
-
-**結果: 既知の脆弱性 0 件**
-
-| 対象 | パッケージ数 | 検出件数 |
-|---|---|---|
-| 直接依存 + 推移的依存 | 55 | **0** |
-
-### 8.2 静的コード解析（Bandit）
-
-ソースコード（`app.py` / `config.py` / `data/` / `views/`）730行を対象に解析。
-
-```
-$ bandit -r app.py config.py data/ views/
-
-Test results:
-    No issues identified.
-
-Code scanned:
-    Total lines of code: 730
-    Total lines skipped (#nosec): 0
-
-Run metrics:
-    Total issues (by severity):
-        Low: 0 / Medium: 0 / High: 0
-    Total issues (by confidence):
-        Low: 0 / Medium: 0 / High: 0
-```
-
-**結果: 指摘事項 0 件**
-
-| 深刻度 | 件数 |
-|---|---|
-| High | **0** |
-| Medium | **0** |
-| Low | **0** |
-
-### 8.3 総評
-
-| 検査項目 | ツール | 結果 |
-|---|---|---|
-| 依存パッケージ既知脆弱性 | pip-audit | ✅ 問題なし |
-| ソースコード静的解析 | Bandit | ✅ 問題なし |
+*   **依存脆弱性検査 (pip-audit)**: **既知の脆弱性 0 件**
+*   **静的コードセキュリティスキャン (Bandit)**: **指摘事項 0 件**
 
 ---
 
-## 9. 今後の拡張候補
+## 8. 結論と総評
 
-| 項目 | 概要 |
-|---|---|
-| 指標追加 | `config.py` の `FRED_SERIES` に追加するだけで日本指標を拡張可能 |
-| 対象国追加 | `WB_COUNTRIES` / `IMF_COUNTRIES` にエントリを追加 |
-| Streamlit マルチページ化 | タブをページ分割し、URL で直接アクセス可能にする |
-| テスト追加 | `data/` 層の取得関数に pytest + モックを整備 |
-| CI/CD | GitHub Actions で `uv run python -m pytest` を自動実行 |
+本プロジェクトは、API 通信を用いた外部オープンデータの可視化にとどまらず、実務で頻出するローカルファイル（CSV/Excel）や社内データベース（SQLite）からの入力・集計に対応できる汎用的なStreamlitダッシュボード構成を確立した。
+さらに、これらすべての機能を「ユーザーにインストーラや環境構築を強要しない」ポータブル実行ファイル（EXE）としてワンクリックビルド可能にし、実用性の極めて高い業務アプリ配信モデルを構築できた。

@@ -88,6 +88,7 @@ dependencies = [
     "plotly>=5.20",
     "requests>=2.31",
     "python-dotenv>=1.0",
+    "pyinstaller>=6.21.0",
 ]
 
 [dependency-groups]
@@ -146,6 +147,11 @@ test-results/
 # OS
 .DS_Store
 Thumbs.db
+
+# PyInstaller
+build/
+dist/
+*.spec
 """)
 
     # ─── 4. config.py ────────────────────────────────────────────────
@@ -205,12 +211,16 @@ COLOR_PALETTE: list[str] = [
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import streamlit as st
 from dotenv import load_dotenv
 
-load_dotenv(Path(__file__).parent / ".env")
+if getattr(sys, "frozen", False):
+    load_dotenv(Path(sys.executable).parent / ".env")
+else:
+    load_dotenv(Path(__file__).parent / ".env")
 
 from config import WB_COUNTRIES, WB_DEFAULTS       # noqa: E402
 from data import fetch_wb_gdp                       # noqa: E402
@@ -253,6 +263,127 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+""")
+
+    # ─── 5-2. launcher.py ─────────────────────────────────────────────
+    write(target / "launcher.py", f"""\
+\"\"\"
+launcher.py – EXE 起動ラッパー（bootstrap.run 直接呼び出し版）
+\"\"\"
+import sys
+import os
+import time
+import socket
+import threading
+import webbrowser
+
+PORT = 8501
+URL  = f"http://localhost:{{PORT}}"
+
+
+def find_app_py() -> str:
+    if hasattr(sys, "_MEIPASS"):
+        return os.path.join(sys._MEIPASS, "app.py")
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), "app.py")
+
+
+def wait_for_server(host: str = "localhost", port: int = PORT, timeout: float = 30.0):
+    \"\"\"ポートが開くまで待機してからブラウザを開く\"\"\"
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        try:
+            with socket.create_connection((host, port), timeout=0.5):
+                webbrowser.open(URL)
+                return
+        except OSError:
+            time.sleep(0.3)
+    webbrowser.open(URL)  # タイムアウトしても一応開く
+
+
+if __name__ == "__main__":
+    app_path = find_app_py()
+
+    os.environ["STREAMLIT_GLOBAL_DEVELOPMENT_MODE"] = "false"
+    os.environ["STREAMLIT_BROWSER_GATHER_USAGE_STATS"] = "false"
+    os.environ["STREAMLIT_SERVER_ENABLE_CORS"] = "false"
+    os.environ["STREAMLIT_SERVER_ENABLE_XSRF_PROTECTION"] = "false"
+
+    threading.Thread(target=wait_for_server, daemon=True).start()
+
+    from streamlit.web import bootstrap
+    flag_options = {{
+        "server.port": PORT,
+        "server.headless": True,
+        "server.enableCORS": False,
+        "server.enableXsrfProtection": False,
+        "browser.gatherUsageStats": False,
+        "global.developmentMode": False,
+    }}
+    bootstrap.load_config_options(flag_options)
+    bootstrap.run(
+        main_script_path=app_path,
+        is_hello=False,
+        args=[],
+        flag_options=flag_options,
+    )
+
+# PyInstaller 静的解析用のダミーインポート
+if False:
+    import app
+    import config
+    import data.worldbank
+    import views.page_config
+    import views.sidebar
+    import views.components
+    import views.dashboard
+""")
+
+    # ─── 5-3. build.bat ───────────────────────────────────────────────
+    write(target / "build.bat", f"""\
+@echo off
+chcp 65001 > nul
+echo ============================================
+echo  {app_name} - PyInstaller Build Script
+echo ============================================
+
+echo [1/3] Cleaning previous build...
+if exist build  rmdir /s /q build
+if exist dist   rmdir /s /q dist
+
+echo [2/3] Running PyInstaller...
+uv run pyinstaller ^
+  --name "{app_name}" ^
+  --onedir ^
+  --windowed ^
+  --add-data "app.py;." ^
+  --add-data "config.py;." ^
+  --add-data "data;data" ^
+  --add-data "views;views" ^
+  --add-data ".venv\\Lib\\site-packages\\streamlit;streamlit" ^
+  --add-data ".venv\\Lib\\site-packages\\plotly;plotly" ^
+  --hidden-import streamlit ^
+  --hidden-import pandas ^
+  --hidden-import requests ^
+  --hidden-import plotly ^
+  --hidden-import dotenv ^
+  --hidden-import config ^
+  --hidden-import data.worldbank ^
+  --hidden-import views.page_config ^
+  --hidden-import views.sidebar ^
+  --hidden-import views.components ^
+  --hidden-import views.dashboard ^
+  --hidden-import streamlit.web.cli ^
+  --hidden-import streamlit.runtime.scriptrunner ^
+  --hidden-import streamlit.runtime.caching ^
+  --collect-all streamlit ^
+  --collect-all plotly ^
+  launcher.py
+
+echo [3/3] Done!
+echo.
+echo Output: dist\\{app_name}\\{app_name}.exe
+echo.
+pause
 """)
 
     # ─── 6. data/ ────────────────────────────────────────────────────
@@ -690,6 +821,19 @@ uv run streamlit run app.py
 
 ---
 
+## EXE化 (実行ファイルの作成)
+
+Windows 環境で、以下のバッチファイルを実行するとスタンドアロンの EXE（実行ファイル）を作成できます。
+
+```bash
+build.bat
+```
+
+ビルド完了後、`dist/{app_name}/{app_name}.exe` をダブルクリックするだけで、コンソールウィンドウなしで起動し、自動的にブラウザでダッシュボードが開きます。
+※ 起動時に `.env` ファイルの情報を読み込むため、`dist/{app_name}/` フォルダの中に `.env` ファイルをコピーして配置してください。
+
+---
+
 ## API キーが必要なデータソースを追加する場合
 
 `.env` に API キーを記載してください。
@@ -719,6 +863,8 @@ uv run pytest tests/e2e/ -v
 ```text
 {app_name}/
 ├── app.py           # エントリーポイント（st.set_page_config は必ずここで最初に呼ぶ）
+├── launcher.py      # EXE 起動用ラッパー
+├── build.bat        # EXE ビルド用バッチファイル
 ├── config.py        # 定数・APIキー・マスターデータ
 ├── data/            # 外部 API 呼び出し専用（st.* は書かない）
 │   └── worldbank.py # 世界銀行 API（@st.cache_data 必須）
@@ -771,7 +917,7 @@ uv run pytest tests/e2e/ -v
 場所: {target}
 
 生成ファイル:
-  app.py / config.py
+  app.py / config.py / launcher.py / build.bat
   data/worldbank.py
   views/page_config.py / sidebar.py / dashboard.py / components.py
   tests/test_imports.py / tests/e2e/
@@ -788,6 +934,13 @@ uv run pytest tests/e2e/ -v
   uv sync
   uv run streamlit run app.py
   -> http://localhost:8501/
+
+----------------------------------------------------------
+EXE化する
+----------------------------------------------------------
+  cd {target}
+  build.bat
+  -> dist/{app_name}/{app_name}.exe が生成されます
 
 テスト実行:
   uv run pytest tests/test_imports.py -v

@@ -2,25 +2,34 @@
 
 ## 1. 概要
 
-世界銀行（World Bank）と IMF の2つのデータソースを利用し、各国のGDP関連指標を可視化・比較するStreamlitダッシュボード。
-1つのアプリ内に **タブ** で2画面を分離する統合型設計。
+世界銀行（World Bank）や IMF などの外部 API データに加え、ローカルのファイルやデータベース（CSV、Excel、SQLite）を含む多様なデータソースからデータを取得し、各国のGDPおよび関連指標を可視化・比較するStreamlitダッシュボード。
+開発フレームワークとしてのデータソース対応力を示すデモアプリとして機能し、以下の6つのタブを搭載しています。
 
-| タブ | データソース | 指標 |
+| タブ | データソース | 指標・特徴 |
 |---|---|---|
 | 🌍 世界銀行 GDP | World Bank API v2 | GDP（米ドル建て）`NY.GDP.MKTP.CD` |
-| 📈 IMF GDP成長率 | IMF Datamapper API | 実質GDP成長率 `NGDP_RPCH` |
+| 📈 IMF GDP成長率 | World Bank API v2 | 実質GDP成長率 `NY.GDP.MKTP.KD.ZG`（0%基準線付き） |
+| 🇯🇵 日本経済指標 | FRED / e-Stat | 鉱工業生産・失業率・CPI・景気動向指数 |
+| 📁 CSVデータ (ローカル) | ローカル CSV ファイル | 積層エリアチャートによる可視化（カナダ・ブラジル・韓国） |
+| 🗄️ SQLiteデータ (ローカル) | ローカル SQLite DB | グループ棒グラフによる可視化（イギリス・フランス・イタリア） |
+| 📊 Excelデータ (ローカル) | ローカル Excel ファイル | 折れ線グラフによる可視化（オーストラリア・インド・ドイツ） |
+
+また、本プロジェクトはローカルでのWebサーバー起動に加え、**Windows用スタンドアロンEXE（実行ファイル）**としてのビルドにも対応しています。
 
 ---
 
 ## 2. 技術スタック
 
-| 項目 | 技術 |
-|---|---|
-| 言語 | Python 3.10+ |
-| フレームワーク | Streamlit |
-| データ取得 | `requests` + `pandas` |
-| 可視化 | `plotly` |
-| パッケージ管理 | `uv` + `pyproject.toml`（仮想環境 `.venv`） |
+| 項目 | 技術 | 目的 |
+|---|---|---|
+| 言語 | Python 3.10+ | 基本開発言語 |
+| フレームワーク | Streamlit | UI・ダッシュボード構築 |
+| データ取得/解析 | `requests` / `pandas` | API 接続およびデータ加工 |
+| Excel 解析 | `openpyxl` | ローカル Excel ファイルの読み込み |
+| データベース | `sqlite3` (標準ライブラリ) | ローカル SQLite DB への接続・クエリ実行 |
+| 可視化 | `plotly` | インタラクティブなグラフ描画 |
+| パッケージ管理 | `uv` + `pyproject.toml` | 仮想環境（`.venv`）および高速なパッケージ同期 |
+| EXE化ツール | `pyinstaller` | ポータブルな配布用実行ファイル（EXE）のコンパイル |
 
 ---
 
@@ -28,33 +37,44 @@
 
 ### 3.1 ディレクトリ構成
 
-```
+```text
 gdp-dashboard/
 ├── app.py                  # エントリーポイント・タブ制御・セッション管理
-├── config.py               # 全定数・マスターデータ（国コード・APIキー・カラー）
+├── launcher.py             # EXE 起動用ラッパー（Streamlitのプログラム起動 & ブラウザ自動表示）
+├── build.bat               # EXE ビルド用バッチファイル（PyInstaller呼び出し定義）
+├── generate_dummy_data.py  # ローカルデモ用のダミーデータ（CSV/Excel/SQLite）作成スクリプト
+├── config.py               # 全定数・マスターデータ（国コード・カラー）
 ├── pyproject.toml          # 依存パッケージ定義（uv管理）
-├── .env                    # APIキー（FRED / e-Stat）
-├── data/
+├── .env                    # APIキー（FRED / e-Stat）の格納用
+├── data/                   # データ取得層（UI・Streamlit描画ロジックは含めない）
 │   ├── __init__.py
-│   ├── worldbank.py        # fetch_wb_gdp, fetch_imf_gdp_growth
-│   ├── fred.py             # fetch_fred_series
-│   └── estat.py            # fetch_estat_ci
-├── views/
+│   ├── worldbank.py        # 世界銀行 GDP / IMF GDP 成長率
+│   ├── fred.py             # FRED 経済指標
+│   ├── estat.py            # e-Stat 景気指標
+│   ├── local_csv.py        # ローカル CSV ファイル読み込み
+│   ├── local_excel.py      # ローカル Excel ファイル読み込み
+│   ├── local_sqlite.py     # ローカル SQLite データベース読み込み
+│   └── dummy/              # 自動生成されるデモ用ダミーデータ配置先
+│       ├── gdp_data.csv
+│       ├── gdp_data.xlsx
+│       └── gdp_data.sqlite
+├── views/                  # UI描画層（データの取得・永続化処理は含めない）
 │   ├── __init__.py
-│   ├── page_config.py      # setup_page, グローバルCSS
-│   ├── sidebar.py          # render_sidebar
-│   ├── components.py       # 共通UI部品（CSVボタン・テーブル）
-│   ├── worldbank_tab.py    # render_wb_dashboard
-│   ├── imf_tab.py          # render_imf_dashboard
-│   └── japan_tab.py        # render_japan_dashboard
-├── demo_playwright.py      # 自動デモ & 録画スクリプト
-└── docs/
-    ├── spec.md
-    ├── japan_indicators_research.md
-    └── prompts.md
+│   ├── page_config.py      # ページ初期化・グローバルCSS
+│   ├── sidebar.py          # サイドバー UI と入力値返却
+│   ├── components.py       # 共通UI部品（CSVダウンロードボタン・テーブルなど）
+│   ├── worldbank_tab.py    # 世界銀行 GDP 画面
+│   ├── imf_tab.py          # IMF GDP 成長率画面
+│   ├── japan_tab.py        # 日本経済指標画面
+│   ├── local_csv_tab.py    # ローカル CSV 可視化画面
+│   ├── local_sqlite_tab.py # ローカル SQLite 可視化画面
+│   └── local_excel_tab.py  # ローカル Excel 可視化画面
+└── docs/                   # プロジェクト資料・ドキュメント類
+    ├── spec.md             # 本仕様書
+    ├── implementation_plan.md # 開発統合計画書
+    ├── task.md             # タスクチェックリスト
+    └── walkthrough.md      # 検証実績報告書
 ```
-
-**設計方針**: データ取得（`data/`）と UI 描画（`views/`）を完全分離。`config.py` に定数を集約し、指標追加時の変更箇所を最小化。
 
 ---
 
@@ -64,11 +84,15 @@ gdp-dashboard/
 graph TD
     app["app.py\nエントリーポイント"]
     config["config.py\n定数・マスターデータ"]
+    gen["generate_dummy_data.py\nダミーデータ生成スクリプト"]
 
     subgraph data["data/ — データ取得層"]
         wb["worldbank.py\nfetch_wb_gdp\nfetch_imf_gdp_growth"]
         fred["fred.py\nfetch_fred_series"]
         estat["estat.py\nfetch_estat_ci"]
+        csv["local_csv.py\nfetch_local_csv"]
+        excel["local_excel.py\nfetch_local_excel"]
+        sqlite["local_sqlite.py\nfetch_local_sqlite"]
     end
 
     subgraph views["views/ — UI描画層"]
@@ -78,34 +102,56 @@ graph TD
         wbt["worldbank_tab.py\nrender_wb_dashboard"]
         imft["imf_tab.py\nrender_imf_dashboard"]
         jpt["japan_tab.py\nrender_japan_dashboard"]
+        csvt["local_csv_tab.py\nrender_local_csv"]
+        excelt["local_excel_tab.py\nrender_local_excel"]
+        sqlitet["local_sqlite_tab.py\nrender_local_sqlite"]
     end
 
-    subgraph external["外部 API"]
+    subgraph external["データソース"]
         wbapi["World Bank API v2"]
         fredapi["FRED API"]
         estatapi["e-Stat API"]
+        local_files["ローカルファイル・DB\n(data/dummy/)"]
     end
 
     app --> config
     app --> wb
     app --> fred
     app --> estat
+    app --> csv
+    app --> excel
+    app --> sqlite
     app --> pc
     app --> sb
     app --> wbt
     app --> imft
     app --> jpt
+    app --> csvt
+    app --> excelt
+    app --> sqlitet
+    
+    app -.-> gen
 
     wb --> config
     fred --> config
     estat --> config
+    csv --> local_files
+    excel --> local_files
+    sqlite --> local_files
 
     wbt --> comp
     imft --> comp
     jpt --> comp
+    csvt --> comp
+    excelt --> comp
+    sqlitet --> comp
+    
     wbt --> config
     imft --> config
     jpt --> config
+    csvt --> config
+    excelt --> config
+    sqlitet --> config
     sb --> config
 
     wb --> wbapi
@@ -123,21 +169,27 @@ sequenceDiagram
     participant SB as sidebar.py
     participant App as app.py
     participant Data as data/（取得層）
-    participant API as 外部API
+    participant Local as data/dummy/（ローカル）
     participant View as views/（描画層）
     participant SS as st.session_state
 
-    User->>SB: 国・期間を選択
-    User->>SB: 🔍 データ取得ボタン押下
-    SB-->>App: inputs（選択値）を返す
-    App->>Data: fetch_xxx() 呼び出し
-    Data->>API: HTTP GET
-    API-->>Data: JSONレスポンス
-    Data-->>Data: DataFrame変換・キャッシュ
+    User->>SB: 選択肢/期間を選択
+    User->>SB: ボタン（読込/取得）押下
+    SB-->>App: inputs を返す
+    alt ローカルデータの場合
+        App->>Local: ファイル存在チェック
+        Note right of App: 無ければ generate_dummy_data() で自動生成
+        App->>Data: fetch_local_xxx() 呼び出し
+        Data->>Local: ファイルロード (CSV/Excel/SQLite)
+        Local-->>Data: ファイルデータ
+    else 外部 API の場合
+        App->>Data: fetch_xxx() 呼び出し
+        Data->>Data: HTTP GET / API キャッシュチェック
+    end
     Data-->>App: DataFrame
-    App->>SS: session_state に保存
+    App->>SS: session_state に保存・期間フィルタ
     App->>View: render_xxx(df) 呼び出し
-    View-->>User: グラフ・メトリクス・テーブル表示
+    View-->>User: Plotly グラフ・主要指標メトリクス表示
     User->>View: 💾 CSVダウンロードボタン押下
     View-->>User: UTF-8 BOM付きCSVをダウンロード
 ```
@@ -146,12 +198,17 @@ sequenceDiagram
 
 ### 3.4 データキャッシュ戦略
 
-| 関数 | キャッシュ | TTL | 備考 |
+Streamlit のメモリキャッシュ機能を利用し、データソースへの無駄なリクエストやファイル IO を軽減します。
+
+| 関数 | キャッシュデコレータ | TTL | キャッシュキー |
 |---|---|---|---|
-| `fetch_wb_gdp` | `@st.cache_data` | 24h | 引数（国コード・期間）をキーにキャッシュ |
-| `fetch_imf_gdp_growth` | `@st.cache_data` | 24h | 引数（国コード・期間）をキーにキャッシュ |
-| `fetch_fred_series` | `@st.cache_data` | 24h | シリーズID・期間をキーにキャッシュ |
-| `fetch_estat_ci` | `@st.cache_data` | 24h | 引数なし・固定データをキャッシュ |
+| `fetch_wb_gdp` | `@st.cache_data` | 24時間 | 国コード・期間 |
+| `fetch_imf_gdp_growth` | `@st.cache_data` | 24時間 | 国コード・期間 |
+| `fetch_fred_series` | `@st.cache_data` | 24時間 | FRED シリーズID・期間 |
+| `fetch_estat_ci` | `@st.cache_data` | 24時間 | 引数なし（固定キャッシュ） |
+| `fetch_local_csv` | `@st.cache_data` | 1時間 | ファイルパス |
+| `fetch_local_excel` | `@st.cache_data` | 1時間 | ファイルパス |
+| `fetch_local_sqlite` | `@st.cache_data` | 1時間 | DBパス |
 
 ---
 
@@ -159,7 +216,7 @@ sequenceDiagram
 
 ### 4.1 サイドバー
 
-```
+```text
 ┌─────────────────────────┐
 │ ⚙️ ダッシュボード設定      │
 │─────────────────────────│
@@ -172,130 +229,108 @@ sequenceDiagram
 │  [マルチセレクト: 国選択]   │
 │  [スライダー: 期間]       │
 │  [🔍 データ取得 ボタン]    │
+│─────────────────────────│
+│ 🇯🇵 日本経済指標          │
+│  [スライダー: 期間]       │
+│  [🔍 データ取得 ボタン]    │
+│─────────────────────────│
+│ 📁 ローカルデータ         │
+│  [スライダー: 期間]       │
+│  [🔌 ローカルデータ読込]  │
 └─────────────────────────┘
 ```
 
 ### 4.2 メイン画面
 
-```
-┌─────────────────────────────────────────────┐
-│ 📊 各国GDP比較ダッシュボード                    │
-│                                             │
-│ [🌍 世界銀行 GDP] [📈 IMF GDP成長率]  ← タブ   │
-│─────────────────────────────────────────────│
-│ 📊 主要指標（最新年）                          │
-│ ┌──┐ ┌──┐ ┌──┐ ┌──┐ ┌──┐                   │
-│ │国1│ │国2│ │国3│ │国4│ │国5│ ← メトリクス    │
-│ └──┘ └──┘ └──┘ └──┘ └──┘                   │
-│─────────────────────────────────────────────│
-│ [Plotly 折れ線グラフ]                          │
-│─────────────────────────────────────────────│
-│ ▶ 📋 生データを表示  ← エクスパンダー            │
-│   [DataFrameテーブル]                         │
-└─────────────────────────────────────────────┘
+```text
+┌────────────────────────────────────────────────────────────────────────┐
+│ 📊 各国GDP比較ダッシュボード                                              │
+│                                                                        │
+│ [世界銀行 GDP] [IMF GDP成長率] [日本経済指標] [CSV] [SQLite] [Excel]  ←タブ│
+│────────────────────────────────────────────────────────────────────────│
+│ 📊 主要指標（最新年）                                                    │
+│ ┌──┐ ┌──┐ ┌──┐                                                         │
+│ │国1│ │国2│ │国3│                                                      │
+│ └──┘ └──┘ └──┘                                                         │
+│────────────────────────────────────────────────────────────────────────│
+│ [Plotly インタラクティブグラフ (エリア / 折れ線 / グループ棒グラフ)]          │
+│────────────────────────────────────────────────────────────────────────│
+│ ▶ 📋 生データを表示  ← エクスパンダー                                       │
+│   [DataFrameテーブル] と [💾 CSVダウンロード ボタン]                     │
+└────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
 ## 5. 機能要件
 
-### 5.1 世界銀行 GDPタブ
+### 5.1 各ローカルデータソース要件
 
-- World Bank API v2 から `NY.GDP.MKTP.CD` を取得
-- 国コード: ISO 3166-1 alpha-2（JP, US, CN, DE, IN 等）
-- デフォルト選択: 日本, アメリカ, 中国, ドイツ, インド
-- 期間スライダー: 1960年〜2023年（デフォルト 2000〜2023）
-- キャッシュ: `@st.cache_data(ttl=86400)`
-- GDP値は兆ドル単位で表示
+#### A. CSVデータタブ
+- **ファイルパス**: `data/dummy/gdp_data.csv`
+- **対象国**: カナダ、ブラジル、韓国（2010年〜2025年のデータ）
+- **可視化グラフ**: 積層エリアチャート (`px.area`)
+- カラムマッピングにより、日本語表記（「国」「年」「GDP (USD)」）に標準化。
 
-### 5.2 IMF GDP成長率タブ
+#### B. SQLiteデータタブ
+- **ファイルパス**: `data/dummy/gdp_data.sqlite` （テーブル名: `gdp_data`）
+- **対象国**: イギリス、フランス、イタリア（2010年〜2025年のデータ）
+- **可視化グラフ**: グループ棒グラフ (`px.bar` barmode="group")
+- カラムマッピングにより、データベースのカラム名（`country`, `year`, `gdp_usd`）から標準表記に変換。
 
-- **World Bank API v2** から `NY.GDP.MKTP.KD.ZG`（実質GDP成長率）を取得
-  - ※ IMF Datamapper API が 403 を返すため World Bank に切り替え済み
-- 国コード: ISO 3166-1 alpha-3（JPN, USA, CHN, DEU, IND 等）で選択 → 内部で alpha-2 に変換してリクエスト
-- デフォルト選択: JPN, USA, CHN, DEU, IND
-- 期間スライダー: 1980年〜2029年（デフォルト 2000〜2029）
-- キャッシュ: `@st.cache_data(ttl=86400)`
-- 成長率は%表示、0%基準線を追加
-
-### 5.3 共通要件
-
-- サイドバーの「データ取得」ボタンを押すまでデータ取得しない
-- `st.session_state` でデータを永続化（タブ切替時も保持）
-- ネットワークエラー・APIエラー時は `st.error` で通知
-- 型ヒント・Docstring を全関数に記述
+#### C. Excelデータタブ
+- **ファイルパス**: `data/dummy/gdp_data.xlsx` （シート名: `GDP Data`）
+- **対象国**: オーストラリア、インド、ドイツ（2010年〜2025年のデータ）
+- **可視化グラフ**: 特徴的な二点鎖線付き折れ線グラフ (`px.line` dash="dashdot")
+- `openpyxl` をバックエンドエンジンとして安全にデータをパース。
 
 ---
 
-## 6. 実行方法
+## 6. 実行・ビルド方法
 
-### 6.1 アプリ起動
+### 6.1 ローカル開発環境での起動
 
 ```bash
+# 1. パッケージの同期とインストール
+uv sync
+
+# 2. ローカルサーバー起動
 uv run streamlit run app.py
 ```
 
-依存パッケージは PEP 723 Inline script metadata で宣言済み。`uv run` が自動インストールする。
-
-### 6.2 動作確認
-
-ブラウザで `http://localhost:8501` を開き、サイドバーの「🔍 データ取得」ボタンをクリック。
+※ 初めてローカルデータを読み込む際、データファイルが存在しない場合は自動でダミーデータ生成スクリプトが裏側で実行されます。明示的に作成したい場合は、事前に `python generate_dummy_data.py` を実行してください。
 
 ---
 
-## 7. Playwright 自動デモ & 録画（demo_playwright.py）
+### 6.2 Windows スタンドアロン EXE（実行ファイル）の作成
 
-### 7.1 概要
+Windows 環境において、Python や依存ライブラリのインストールが不要な配布用EXEを作成できます。
 
-`demo_playwright.py` は Streamlit アプリを Playwright で自動操作し、デモ全体を WebM 動画として録画するスクリプト。
+#### 1. ビルドの実行
 
-### 7.2 前提条件
+リポジトリ直下にある `build.bat` を実行します。
 
-1. Streamlit アプリが `http://localhost:8501` で起動済み
-2. Playwright ブラウザがインストール済み（初回のみ `playwright install chromium`）
-
-### 7.3 実行方法
-
-```bash
-# Windows では PYTHONIOENCODING=utf-8 が必須（cp932 での文字化け回避）
-$env:PYTHONIOENCODING="utf-8"; uv run --with playwright demo_playwright.py
+```cmd
+build.bat
 ```
 
-### 7.4 設定パラメータ
+バッチファイルを実行すると、PyInstaller により `dist\GDP_Dashboard` フォルダが作成され、その中に `GDP_Dashboard.exe`（GUI用のウィンドウモード実行ファイル）と依存ファイル群がコンパイル出力されます。
 
-| 定数 | デフォルト値 | 説明 |
-|---|---|---|
-| `APP_URL` | `http://localhost:8501` | 対象 Streamlit URL |
-| `RECORDING_DIR` | スクリプトと同じフォルダ | 録画ファイルの出力先 |
-| `VIEWPORT_W / H` | `1920 × 1080` | ブラウザの解像度 |
-| `SLOW_MO` | `300 ms` | 操作間のディレイ（デモを見やすくする） |
+#### 2. 配布と実行
 
-### 7.5 デモシナリオ（8ステップ）
-
-| ステップ | 操作 |
-|---|---|
-| 1 | アプリを開き、Streamlit のロード完了を待つ |
-| 2 | 世界銀行「🔍 データ取得」ボタンをクリック → Plotly チャート待機 |
-| 3 | スムーズスクロールでグラフを閲覧 |
-| 4 | 「📋 生データを表示」エクスパンダーを展開 |
-| 5 | ページトップに戻る |
-| 6 | IMF タブに切り替え |
-| 7 | サイドバーをスクロールして IMF「🔍 データ取得」ボタンをクリック |
-| 8 | IMF グラフ・テーブルを閲覧し終了 |
-
-### 7.6 出力
-
-- **録画ファイル**: `d:\streamlit例\*.webm`（コンテキスト close 時に自動保存）
-- ファイル名は Playwright が自動生成するハッシュ形式（例: `page@xxxx.webm`）
+1.  作成された `dist\GDP_Dashboard` フォルダ全体の構成を維持したまま ZIP 圧縮などを行い、他の Windows マシンへ配布します。
+2.  実行する前に、環境設定ファイル `.env`（または `.env.example` から作成したファイル）を `GDP_Dashboard.exe` と**同じフォルダ内**にコピーして配置します。
+3.  `GDP_Dashboard.exe` をダブルクリックして起動します。
+    *   コンソールウィンドウが立ち上がらない「ウィンドウモード」で安全に起動します。
+    *   バックグラウンドでローカルサーバーが起動し、ポート 8501 の接続準備が整い次第、自動的に規定の Web ブラウザで `http://localhost:8501` が開いてダッシュボードが使用可能になります。
 
 ---
 
-## 8. エラーハンドリング
+## 7. エラーハンドリング設計
 
 | 状況 | 挙動 |
 |---|---|
-| 国を選択せずにデータ取得ボタンを押す | `st.toast` で警告を表示、データ取得はスキップ |
-| ネットワーク接続エラー | `RuntimeError` を捕捉し `st.error` で表示 |
-| API タイムアウト（30 秒） | `RuntimeError` を捕捉し `st.error` で表示 |
-| API が空データを返す | `RuntimeError` を捕捉し `st.error` で表示 |
-| Playwright でエクスパンダーが見つからない | `except Exception` でスキップし続行 |
+| 国や指標を選択せずに「データ取得」を実行 | `st.toast` で警告を表示し、API アクセスはスキップ |
+| ネットワーク切断・API 障害 | `RuntimeError` を適切に捕捉し、`st.error` により画面上で分かりやすくユーザーに通知 |
+| ローカルファイルが見つからない | `generate_dummy_data` を内部で自動実行して補完し、実行時エラーを防ぐ |
+| SQLite の接続やクエリのエラー | Connection を try-finally で確実にクローズし、リソースのリークを防ぎつつエラー詳細を画面に表示 |

@@ -54,7 +54,16 @@ def render_sidebar() -> dict[str, Any]:
         japan_execute: bool = st.button("🔍 データ取得", key="japan_exec", use_container_width=True)
 
         st.markdown("---")
-        st.caption("データソース: World Bank API v2 / FRED / e-Stat")
+
+        st.markdown("### 📁 ローカルデータ")
+        st.caption("CSV / SQLite / Excel よりデータ読込")
+        local_years: tuple[int, int] = st.slider(
+            "ローカル表示期間", min_value=2010, max_value=2025, value=(2010, 2025), key="local_years"
+        )
+        local_execute: bool = st.button("🔌 ローカルデータ読込", key="local_exec", use_container_width=True)
+
+        st.markdown("---")
+        st.caption("データソース: World Bank API v2 / FRED / e-Stat / Local Files")
 
     return {
         "wb_countries": wb_countries,
@@ -65,4 +74,7 @@ def render_sidebar() -> dict[str, Any]:
         "imf_execute": imf_execute,
         "japan_years": japan_years,
         "japan_execute": japan_execute,
+        "local_years": local_years,
+        "local_execute": local_execute,
     }
+

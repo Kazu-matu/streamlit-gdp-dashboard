@@ -7,17 +7,39 @@
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import streamlit as st
 from dotenv import load_dotenv
 
-load_dotenv(Path(__file__).parent / ".env")
+if getattr(sys, "frozen", False):
+    load_dotenv(Path(sys.executable).parent / ".env")
+else:
+    load_dotenv(Path(__file__).parent / ".env")
 
 from config import IMF_DEFAULTS, FRED_SERIES  # noqa: E402
-from data import fetch_wb_gdp, fetch_imf_gdp_growth, fetch_fred_series, fetch_estat_ci  # noqa: E402
-from views import setup_page, render_sidebar, render_wb_dashboard, render_imf_dashboard, render_japan_dashboard  # noqa: E402
+from data import (  # noqa: E402
+    fetch_wb_gdp,
+    fetch_imf_gdp_growth,
+    fetch_fred_series,
+    fetch_estat_ci,
+    fetch_local_csv,
+    fetch_local_excel,
+    fetch_local_sqlite,
+)
+from views import (  # noqa: E402
+    setup_page,
+    render_sidebar,
+    render_wb_dashboard,
+    render_imf_dashboard,
+    render_japan_dashboard,
+    render_local_csv,
+    render_local_excel,
+    render_local_sqlite,
+)
 from views.components import empty_tab_placeholder  # noqa: E402
+
 
 
 def main() -> None:
@@ -82,11 +104,45 @@ def main() -> None:
             st.session_state.pop("japan_ci", None)
         st.session_state["japan_year_range"] = inputs["japan_years"]
 
+    # ── ローカルデータ ──
+    base_dir = Path(sys.executable).parent if getattr(sys, "frozen", False) else Path(__file__).parent
+    csv_path = base_dir / "data" / "dummy" / "gdp_data.csv"
+    excel_path = base_dir / "data" / "dummy" / "gdp_data.xlsx"
+    sqlite_path = base_dir / "data" / "dummy" / "gdp_data.sqlite"
+
+    if inputs["local_execute"]:
+        try:
+            with st.spinner("ローカルデータ（CSV/Excel/SQLite）を読み込み中..."):
+                # もしファイルが存在しなければ自動生成
+                if not (csv_path.exists() and excel_path.exists() and sqlite_path.exists()):
+                    from generate_dummy_data import generate_dummy_data
+                    generate_dummy_data(base_dir)
+                
+                st.session_state["local_csv_raw"] = fetch_local_csv(str(csv_path))
+                st.session_state["local_excel_raw"] = fetch_local_excel(str(excel_path))
+                st.session_state["local_sqlite_raw"] = fetch_local_sqlite(str(sqlite_path))
+            st.toast("✅ ローカルデータを読み込みました！", icon="✅")
+        except Exception as exc:
+            st.error(f"📁 ローカルデータ読込エラー: {exc}")
+
+    # ローカルデータ フィルタリング処理
+    for key in ["csv", "excel", "sqlite"]:
+        raw_key = f"local_{key}_raw"
+        filtered_key = f"local_{key}_filtered"
+        if raw_key in st.session_state:
+            df = st.session_state[raw_key]
+            st.session_state[filtered_key] = df[
+                (df["年"] >= inputs["local_years"][0]) & (df["年"] <= inputs["local_years"][1])
+            ]
+
     # ── タブ ──
-    tab_wb, tab_imf, tab_japan = st.tabs([
+    tab_wb, tab_imf, tab_japan, tab_csv, tab_sqlite, tab_excel = st.tabs([
         "🌍 世界銀行 — GDP（米ドル建て）",
         "📈 IMF — 実質 GDP 成長率",
         "🇯🇵 日本経済指標",
+        "📁 CSVデータ (ローカル)",
+        "🗄️ SQLiteデータ (ローカル)",
+        "📊 Excelデータ (ローカル)",
     ])
 
     with tab_wb:
@@ -114,6 +170,25 @@ def main() -> None:
             )
         else:
             empty_tab_placeholder("👈 **サイドバー** で期間を選択し、\n「🔍 データ取得」ボタンを押してください。")
+
+    with tab_csv:
+        if "local_csv_filtered" in st.session_state:
+            render_local_csv(st.session_state["local_csv_filtered"])
+        else:
+            empty_tab_placeholder("👈 **サイドバー** で「🔌 ローカルデータ読込」ボタンを押してください。")
+
+    with tab_sqlite:
+        if "local_sqlite_filtered" in st.session_state:
+            render_local_sqlite(st.session_state["local_sqlite_filtered"])
+        else:
+            empty_tab_placeholder("👈 **サイドバー** で「🔌 ローカルデータ読込」ボタンを押してください。")
+
+    with tab_excel:
+        if "local_excel_filtered" in st.session_state:
+            render_local_excel(st.session_state["local_excel_filtered"])
+        else:
+            empty_tab_placeholder("👈 **サイドバー** で「🔌 ローカルデータ読込」ボタンを押してください。")
+
 
 
 if __name__ == "__main__":

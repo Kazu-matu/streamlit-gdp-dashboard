@@ -44,7 +44,7 @@
 |---|---|---|
 | **Python 3.10+** | プログラムの実行環境 | python.org からインストール |
 | **uv** | パッケージ管理（pip の超高速版） | `pip install uv` |
-| **Claude Code** | AI 相棒（バイブコーディングの核心） | VS Code 拡張 or CLI |
+| **copilot** | AI 相棒（バイブコーディングの核心） | VS Code 拡張 or CLI |
 
 ### 1-2. プロジェクト初期化
 

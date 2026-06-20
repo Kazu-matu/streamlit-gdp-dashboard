@@ -1,5 +1,10 @@
 # AI Development Instructions — Streamlit Data Dashboard
 
+| 項目 | 内容 |
+|---|---|
+| 最終更新日 | 2026-06-20 |
+| 対象プロジェクト | Streamlit + pandas + Plotly |
+
 > **For AI assistants**: GitHub Copilot, Cursor, Claude, ChatGPT, Gemini, and others.
 > Follow every rule in this file precisely. If you are unsure, ask the developer before proceeding.
 >

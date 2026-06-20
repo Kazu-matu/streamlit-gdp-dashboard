@@ -64,6 +64,73 @@ gdp-dashboard/
 
 ---
 
+## 新しいダッシュボードの雛形を作る（create_template.py）
+
+このリポジトリには **テンプレート生成スクリプト** が含まれています。  
+コマンド 1 つで、Streamlit + pandas + Plotly の雛形プロジェクトを生成し、そのまま GitHub テンプレートリポジトリとして公開できます。
+
+### 生成コマンド
+
+```bash
+# <アプリ名> は Python の識別子（英数字・アンダースコア、先頭は英字）
+uv run python create_template.py <アプリ名>
+
+# 例
+uv run python create_template.py trade_dashboard
+```
+
+生成先: スクリプトと **同じ階層の上の親ディレクトリ** に `<アプリ名>/` フォルダが作られます。
+
+```
+D:\
+├── streamlit-gdp-dashboard\  ← このリポジトリ
+│   └── create_template.py
+└── trade_dashboard\          ← 生成されるフォルダ
+    ├── app.py / config.py
+    ├── data/worldbank.py     ← @st.cache_data 付きデータ取得
+    ├── views/                ← 描画専用レイヤー
+    ├── tests/test_imports.py ← スモークテスト（即実行可）
+    ├── docs/                 ← 01_要件定義 〜 04_報告書 + 開発入門
+    ├── AI_INSTRUCTIONS.md
+    ├── .github/copilot-instructions.md
+    └── .github/workflows/ci.yml  ← GitHub Actions（自動テスト）
+```
+
+### 生成後の確認
+
+```bash
+cd ..\trade_dashboard     # Windows
+cd ../trade_dashboard     # Mac/Linux
+
+copy .env.example .env
+uv sync
+
+# スモークテスト（インポート確認）
+uv run pytest tests/test_imports.py -v
+
+# アプリ起動
+uv run streamlit run app.py
+# → http://localhost:8501/ を開いて動作確認
+```
+
+### GitHub テンプレートリポジトリとして公開する
+
+```bash
+cd ..\trade_dashboard
+
+git init
+git add .
+git commit -m "chore: initial template"
+
+# GitHub CLI でリポジトリ作成 & プッシュ
+gh repo create trade_dashboard --public --source=. --remote=origin --push
+
+# 「Use this template」ボタンを有効化
+gh repo edit trade_dashboard --template
+```
+
+---
+
 ## ドキュメント
 
 | ドキュメント | 内容 |

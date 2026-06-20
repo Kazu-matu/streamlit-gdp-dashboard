@@ -15,6 +15,7 @@ uv run pyinstaller ^
   --windowed ^
   --add-data "app.py;." ^
   --add-data "config.py;." ^
+  --add-data "logger_config.py;." ^
   --add-data "data;data" ^
   --add-data "views;views" ^
   --add-data ".venv\Lib\site-packages\streamlit;streamlit" ^
@@ -25,6 +26,7 @@ uv run pyinstaller ^
   --hidden-import plotly ^
   --hidden-import dotenv ^
   --hidden-import config ^
+  --hidden-import logger_config ^
   --hidden-import data.worldbank ^
   --hidden-import data.fred ^
   --hidden-import data.estat ^

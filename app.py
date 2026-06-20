@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+import logging
 
 import streamlit as st
 from dotenv import load_dotenv
@@ -18,7 +19,12 @@ if getattr(sys, "frozen", False):
 else:
     load_dotenv(Path(__file__).parent / ".env")
 
+from logger_config import setup_logging  # noqa: E402
+setup_logging()
+logger = logging.getLogger("app")
+
 from config import IMF_DEFAULTS, FRED_SERIES  # noqa: E402
+
 from data import (  # noqa: E402
     fetch_wb_gdp,
     fetch_imf_gdp_growth,
@@ -62,6 +68,7 @@ def main() -> None:
                     st.session_state["wb_data"] = fetch_wb_gdp(codes, *inputs["wb_years"])
                 st.toast("✅ 世界銀行データを取得しました！", icon="✅")
             except RuntimeError as exc:
+                logger.error(f"🌍 世界銀行データ取得エラー: {exc}", exc_info=True)
                 st.error(f"🌍 世界銀行データ取得エラー: {exc}")
                 st.session_state.pop("wb_data", None)
 
@@ -79,6 +86,7 @@ def main() -> None:
                 st.session_state["imf_year_range"] = inputs["imf_years"]
                 st.toast("✅ IMF データを取得しました！", icon="✅")
             except RuntimeError as exc:
+                logger.error(f"📈 IMF データ取得エラー: {exc}", exc_info=True)
                 st.error(f"📈 IMF データ取得エラー: {exc}")
                 st.session_state.pop("imf_data", None)
 
@@ -92,6 +100,7 @@ def main() -> None:
                 try:
                     fred_data[series_id] = fetch_fred_series(series_id, start_str, end_str)
                 except RuntimeError as exc:
+                    logger.error(f"🇯🇵 FRED データ取得エラー（{series_id}）: {exc}", exc_info=True)
                     st.error(f"🇯🇵 FRED データ取得エラー（{series_id}）: {exc}")
         if fred_data:
             st.session_state["japan_fred"] = fred_data
@@ -100,6 +109,7 @@ def main() -> None:
                 st.session_state["japan_ci"] = fetch_estat_ci()
             st.toast("✅ 日本経済指標を取得しました！", icon="✅")
         except RuntimeError as exc:
+            logger.error(f"🇯🇵 e-Stat データ取得エラー: {exc}", exc_info=True)
             st.error(f"🇯🇵 e-Stat データ取得エラー: {exc}")
             st.session_state.pop("japan_ci", None)
         st.session_state["japan_year_range"] = inputs["japan_years"]
@@ -123,6 +133,7 @@ def main() -> None:
                 st.session_state["local_sqlite_raw"] = fetch_local_sqlite(str(sqlite_path))
             st.toast("✅ ローカルデータを読み込みました！", icon="✅")
         except Exception as exc:
+            logger.error(f"📁 ローカルデータ読込エラー: {exc}", exc_info=True)
             st.error(f"📁 ローカルデータ読込エラー: {exc}")
 
     # ローカルデータ フィルタリング処理

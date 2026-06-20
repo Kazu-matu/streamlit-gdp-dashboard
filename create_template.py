@@ -102,6 +102,57 @@ dev = [
 asyncio_mode = "auto"
 """)
 
+    # ─── 1-2. logger_config.py ───────────────────────────────────────
+    write(target / "logger_config.py", """\
+\"\"\"
+logger_config.py — アプリ全体のロギングを設定するモジュール。
+\"\"\"
+import sys
+import logging
+from pathlib import Path
+
+def setup_logging():
+    \"\"\"ロギングシステムをセットアップする。
+
+    標準エラー出力と `app.log` の両方に出力する。
+    EXE起動時は、実行ファイル本体と同階層に `app.log` を配置する。
+    \"\"\"
+    root_logger = logging.getLogger()
+    
+    # 既にハンドラが定義済みの場合は再設定をスキップ
+    if root_logger.handlers:
+        return
+        
+    if getattr(sys, "frozen", False):
+        log_dir = Path(sys.executable).parent
+    else:
+        log_dir = Path(__file__).parent
+        
+    log_file = log_dir / "app.log"
+    log_format = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+    
+    root_logger.setLevel(logging.INFO)
+    
+    # 1. コンソール出力 (標準エラー)
+    console_handler = logging.StreamHandler(sys.stderr)
+    console_handler.setLevel(logging.INFO)
+    console_formatter = logging.Formatter(log_format)
+    console_handler.setFormatter(console_formatter)
+    root_logger.addHandler(console_handler)
+    
+    # 2. ファイル出力 (UTF-8)
+    try:
+        file_handler = logging.FileHandler(log_file, encoding="utf-8")
+        file_handler.setLevel(logging.INFO)
+        file_formatter = logging.Formatter(log_format)
+        file_handler.setFormatter(file_formatter)
+        root_logger.addHandler(file_handler)
+        
+        logging.getLogger("logger_config").info(f"Logging initialized. File: {log_file}")
+    except Exception as exc:
+        logging.getLogger("logger_config").warning(f"Failed to initialize file logging: {exc}")
+""")
+
     # ─── 2. .env.example ─────────────────────────────────────────────
     write(target / ".env.example", """\
 # 環境設定テンプレート
@@ -213,6 +264,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+import logging
 
 import streamlit as st
 from dotenv import load_dotenv
@@ -221,6 +273,10 @@ if getattr(sys, "frozen", False):
     load_dotenv(Path(sys.executable).parent / ".env")
 else:
     load_dotenv(Path(__file__).parent / ".env")
+
+from logger_config import setup_logging            # noqa: E402
+setup_logging()
+logger = logging.getLogger("app")
 
 from config import WB_COUNTRIES, WB_DEFAULTS       # noqa: E402
 from data import fetch_wb_gdp                       # noqa: E402
@@ -248,8 +304,10 @@ def main() -> None:
                     st.session_state["wb_data"] = fetch_wb_gdp(codes, *inputs["wb_years"])
                 st.toast("データを取得しました！", icon="✅")
             except RuntimeError as exc:
+                logger.error(f"データ取得エラー: {{exc}}", exc_info=True)
                 st.error(f"データ取得エラー: {{exc}}")
                 st.session_state.pop("wb_data", None)
+
 
     # ── タブ ────────────────────────────────────────────────────────
     (tab_wb,) = st.tabs(["🌍 世界銀行 GDP"])
@@ -276,9 +334,12 @@ import time
 import socket
 import threading
 import webbrowser
+import logging
 
 PORT = 8501
 URL  = f"http://localhost:{{PORT}}"
+
+logger = logging.getLogger("launcher")
 
 
 def find_app_py() -> str:
@@ -289,19 +350,27 @@ def find_app_py() -> str:
 
 def wait_for_server(host: str = "localhost", port: int = PORT, timeout: float = 30.0):
     \"\"\"ポートが開くまで待機してからブラウザを開く\"\"\"
+    logger.info(f"Port listener thread started. Waiting for {{host}}:{{port}}...")
     deadline = time.time() + timeout
     while time.time() < deadline:
         try:
             with socket.create_connection((host, port), timeout=0.5):
+                logger.info(f"Server detected on port {{port}}. Triggering default browser to: {{URL}}")
                 webbrowser.open(URL)
                 return
         except OSError:
             time.sleep(0.3)
+    logger.warning("Server startup check timed out. Attempting to open browser anyway.")
     webbrowser.open(URL)  # タイムアウトしても一応開く
 
 
 if __name__ == "__main__":
+    from logger_config import setup_logging
+    setup_logging()
+    
+    logger.info("Starting execution of launcher...")
     app_path = find_app_py()
+    logger.info(f"Resolved app.py path: {{app_path}}")
 
     os.environ["STREAMLIT_GLOBAL_DEVELOPMENT_MODE"] = "false"
     os.environ["STREAMLIT_BROWSER_GATHER_USAGE_STATS"] = "false"
@@ -310,6 +379,7 @@ if __name__ == "__main__":
 
     threading.Thread(target=wait_for_server, daemon=True).start()
 
+    logger.info("Starting Streamlit programmatic bootstrap run...")
     from streamlit.web import bootstrap
     flag_options = {{
         "server.port": PORT,
@@ -331,6 +401,7 @@ if __name__ == "__main__":
 if False:
     import app
     import config
+    import logger_config
     import data.worldbank
     import views.page_config
     import views.sidebar
@@ -357,6 +428,7 @@ uv run pyinstaller ^
   --windowed ^
   --add-data "app.py;." ^
   --add-data "config.py;." ^
+  --add-data "logger_config.py;." ^
   --add-data "data;data" ^
   --add-data "views;views" ^
   --add-data ".venv\\Lib\\site-packages\\streamlit;streamlit" ^
@@ -367,6 +439,7 @@ uv run pyinstaller ^
   --hidden-import plotly ^
   --hidden-import dotenv ^
   --hidden-import config ^
+  --hidden-import logger_config ^
   --hidden-import data.worldbank ^
   --hidden-import views.page_config ^
   --hidden-import views.sidebar ^
@@ -398,6 +471,7 @@ __all__ = ["fetch_wb_gdp"]
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 import pandas as pd
@@ -406,18 +480,28 @@ import streamlit as st
 
 from config import WB_EN_TO_JP, WB_INDICATOR
 
+logger = logging.getLogger(__name__)
+
 
 def _wb_get(url: str, params: dict[str, Any]) -> Any:
     \"\"\"World Bank API へ GET し JSON を返す。エラーは RuntimeError に変換する。\"\"\"
+    logger.info(f"Fetching GDP data. URL: {url} with params: {params}")
     try:
         resp = requests.get(url, params=params, timeout=30)
         resp.raise_for_status()
-    except requests.exceptions.ConnectionError:
-        raise RuntimeError("世界銀行 API への接続に失敗しました。ネットワーク接続を確認してください。")
-    except requests.exceptions.Timeout:
-        raise RuntimeError("世界銀行 API からの応答がタイムアウトしました。")
+    except requests.exceptions.ConnectionError as exc:
+        err_msg = "世界銀行 API への接続に失敗しました。ネットワーク接続を確認してください。"
+        logger.error(f"{err_msg} Details: {exc}", exc_info=True)
+        raise RuntimeError(err_msg)
+    except requests.exceptions.Timeout as exc:
+        err_msg = "世界銀行 API からの応答がタイムアウトしました。"
+        logger.error(f"{err_msg} Details: {exc}", exc_info=True)
+        raise RuntimeError(err_msg)
     except requests.exceptions.HTTPError as exc:
-        raise RuntimeError(f"世界銀行 API エラー: {exc}")
+        err_msg = f"世界銀行 API エラー: {exc}"
+        logger.error(err_msg, exc_info=True)
+        raise RuntimeError(err_msg)
+    logger.info("Successfully fetched JSON from World Bank API")
     return resp.json()
 
 
@@ -439,27 +523,33 @@ def fetch_wb_gdp(
     \"\"\"
     url = (
         f"https://api.worldbank.org/v2/country/"
-        f"{';'.join(country_codes)}/indicator/{WB_INDICATOR}"
+        f"{{';'.join(country_codes)}}/indicator/{{WB_INDICATOR}}"
     )
-    data = _wb_get(url, {"date": f"{start}:{end}", "format": "json", "per_page": 10000})
+    data = _wb_get(url, {{"date": f"{{start}}:{{end}}", "format": "json", "per_page": 10000}})
 
     if not isinstance(data, list) or len(data) < 2 or data[1] is None:
-        raise RuntimeError("世界銀行 API からデータを取得できませんでした。")
+        err_msg = "世界銀行 API からデータを取得できませんでした。"
+        logger.error(err_msg)
+        raise RuntimeError(err_msg)
 
     records = [
-        {
+        {{
             "国": WB_EN_TO_JP.get(item["country"]["value"], item["country"]["value"]),
             "年": int(item["date"]),
             "GDP (USD)": float(item["value"]),
-        }
+        }}
         for item in data[1]
         if item.get("value") is not None
     ]
 
     if not records:
-        raise RuntimeError("選択した条件に該当するデータが見つかりませんでした。")
+        err_msg = "選択した条件に該当するデータが見つかりませんでした。"
+        logger.error(err_msg)
+        raise RuntimeError(err_msg)
 
-    return pd.DataFrame(records).sort_values(["国", "年"]).reset_index(drop=True)
+    result = pd.DataFrame(records).sort_values(["国", "年"]).reset_index(drop=True)
+    logger.info(f"Successfully loaded WB GDP data. Rows: {len(result)}")
+    return result
 """)
 
     # ─── 7. views/ ───────────────────────────────────────────────────
@@ -917,7 +1007,7 @@ uv run pytest tests/e2e/ -v
 場所: {target}
 
 生成ファイル:
-  app.py / config.py / launcher.py / build.bat
+  app.py / config.py / launcher.py / build.bat / logger_config.py
   data/worldbank.py
   views/page_config.py / sidebar.py / dashboard.py / components.py
   tests/test_imports.py / tests/e2e/

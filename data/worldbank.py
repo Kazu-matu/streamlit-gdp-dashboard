@@ -17,18 +17,33 @@ from config import (
 )
 
 
+import logging
+
+logger = logging.getLogger(__name__)
+
+
 def _wb_get(url: str, params: dict[str, Any], source: str) -> Any:
     """World Bank API へ GET し、JSON を返す。エラーは RuntimeError に変換する。"""
+    logger.info(f"Fetching from {source}. URL: {url} with params: {params}")
     try:
         resp = requests.get(url, params=params, timeout=30)
         resp.raise_for_status()
-    except requests.exceptions.ConnectionError:
-        raise RuntimeError(f"{source} への接続に失敗しました。ネットワーク接続を確認してください。")
-    except requests.exceptions.Timeout:
-        raise RuntimeError(f"{source} からの応答がタイムアウトしました。")
+    except requests.exceptions.ConnectionError as exc:
+        err_msg = f"{source} への接続に失敗しました。ネットワーク接続を確認してください。"
+        logger.error(f"{err_msg} Details: {exc}", exc_info=True)
+        raise RuntimeError(err_msg)
+    except requests.exceptions.Timeout as exc:
+        err_msg = f"{source} からの応答がタイムアウトしました。"
+        logger.error(f"{err_msg} Details: {exc}", exc_info=True)
+        raise RuntimeError(err_msg)
     except requests.exceptions.HTTPError as exc:
-        raise RuntimeError(f"{source} エラー: {exc}")
+        err_msg = f"{source} エラー: {exc}"
+        logger.error(f"{err_msg}", exc_info=True)
+        raise RuntimeError(err_msg)
+        
+    logger.info(f"Successfully fetched JSON from {source}")
     return resp.json()
+
 
 
 @st.cache_data(ttl=86400, show_spinner=False)
@@ -66,7 +81,9 @@ def fetch_wb_gdp(
     if not records:
         raise RuntimeError("選択した条件に該当するデータが見つかりませんでした。")
 
-    return pd.DataFrame(records).sort_values(["国", "年"]).reset_index(drop=True)
+    result = pd.DataFrame(records).sort_values(["国", "年"]).reset_index(drop=True)
+    logger.info(f"Successfully loaded WB GDP data. Rows: {len(result)}")
+    return result
 
 
 @st.cache_data(ttl=86400, show_spinner=False)
@@ -109,4 +126,7 @@ def fetch_imf_gdp_growth(
     df = pd.DataFrame(records).T
     df.columns = df.columns.astype(int)
     df.index.name = "country_code"
-    return df.sort_index(axis=1)
+    result = df.sort_index(axis=1)
+    logger.info(f"Successfully loaded IMF growth data. Shape: {result.shape}")
+    return result
+

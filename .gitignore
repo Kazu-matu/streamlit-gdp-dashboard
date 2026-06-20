@@ -32,4 +32,6 @@ dist/
 # Dummy data
 data/dummy/
 
+# Logs
+*.log
 

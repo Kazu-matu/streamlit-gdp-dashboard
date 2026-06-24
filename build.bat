@@ -11,7 +11,7 @@ if exist dist   rmdir /s /q dist
 echo [2/3] Running PyInstaller...
 uv run pyinstaller ^
   --name "GDP_Dashboard" ^
-  --onedir ^
+  --onefile ^
   --windowed ^
   --add-data "app.py;." ^
   --add-data "config.py;." ^

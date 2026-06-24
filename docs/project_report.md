@@ -158,8 +158,53 @@ build.bat
 
 ## 7. セキュリティスキャン結果
 
-- **依存脆弱性検査 (pip-audit)**: **既知の脆弱性 0 件**
-- **静的コードセキュリティスキャン (Bandit)**: **指摘事項 0 件**
+実施日: 2026-06-23
+
+### 7.1 依存パッケージ脆弱性検査（pip-audit）
+
+```
+$ uv run pip-audit
+No known vulnerabilities found
+```
+
+| 項目 | 結果 |
+| --- | --- |
+| 検査対象 | `.venv` 内の全インストール済みパッケージ |
+| 既知の脆弱性 | **0 件** |
+| 判定 | **合格** |
+
+### 7.2 静的コードセキュリティスキャン（Bandit）
+
+```
+$ uv run bandit -r app.py config.py logger_config.py generate_dummy_data.py launcher.py data/ views/ pages/
+
+Test results:
+    No issues identified.
+
+Code scanned:
+    Total lines of code: 1534
+    Total lines skipped (#nosec): 0
+
+Run metrics:
+    Total issues (by severity):
+        Low: 0 / Medium: 0 / High: 0
+    Total issues (by confidence):
+        Low: 0 / Medium: 0 / High: 0
+```
+
+| 項目 | 結果 |
+| --- | --- |
+| 検査対象ファイル | `app.py` / `config.py` / `logger_config.py` / `generate_dummy_data.py` / `launcher.py` / `data/` / `views/` / `pages/` |
+| 検査総行数 | 1,534 行 |
+| 重大度 High 指摘 | **0 件** |
+| 重大度 Medium 指摘 | **0 件** |
+| 重大度 Low 指摘 | **0 件** |
+| 判定 | **合格** |
+
+### 7.3 総評
+
+依存パッケージの脆弱性・ソースコードの静的解析ともに **指摘事項ゼロ** でセキュリティ検査を完了した。
+マルチページ化で追加した `pages/` ディレクトリ（6ファイル・約360行）を含む全コードが対象範囲に含まれている。
 
 ---
 
